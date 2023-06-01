@@ -1,0 +1,375 @@
+#pragma config FOSC = INTRC_NOCLKOUT// Oscillator Selection bits (INTOSCIO oscillator: I/O function on RA6/OSC2/CLKOUT pin, I/O function on RA7/OSC1/CLKIN)
+#pragma config WDTE = OFF       // Watchdog Timer Enable bit (WDT disabled and can be enabled by SWDTEN bit of the WDTCON register)
+#pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
+#pragma config MCLRE = OFF      // RE3/MCLR pin function select bit (RE3/MCLR pin function is digital input, MCLR internally tied to VDD)
+#pragma config CP = OFF         // Code Protection bit (Program memory code protection is disabled)
+#pragma config CPD = OFF        // Data Code Protection bit (Data memory code protection is disabled)
+#pragma config BOREN = OFF      // Brown Out Reset Selection bits (BOR disabled)
+#pragma config IESO = OFF       // Internal External Switchover bit (Internal/External Switchover mode is disabled)
+#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enabled bit (Fail-Safe Clock Monitor is disabled)
+#pragma config LVP = OFF        // Low Voltage Programming Enable bit (RB3 pin has digital I/O, HV on MCLR must be used for programming)
+// CONFIG2
+#pragma config BOR4V = BOR40V   // Brown-out Reset Selection bit (Brown-out Reset set to 4.0V)
+#pragma config WRT = OFF        // Flash Program Memory Self Write Enable bits Write protection off)
+       
+#include <xc.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+
+#define _XTAL_FREQ 500000
+#define _tmr0_value 237
+
+const char *cString = "1. Contador. \r\n2. Enviar un valor\r\n";
+
+unsigned short CCPR = 0;        // Interpolacion lineal
+unsigned short CCPR_2 = 0;       
+uint8_t pot1con = 0;
+uint8_t pot1rl = 0;
+uint8_t pot2con = 0;
+uint8_t pot2rl = 0;
+uint8_t pot3con = 0;
+uint8_t pot3rl = 0;
+uint8_t pot4con = 0;
+uint8_t pot4rl = 0;
+uint8_t pot5con = 0;
+uint8_t pot5rl = 0;
+unsigned int servos = 0;
+char input[2];
+char input[2];
+uint8_t address_CCPR2L_1 = 0x02;
+uint8_t address_CCP2CON_1 = 0x03; 
+uint8_t address_CCPR2L_2 = 0x04;
+uint8_t address_CCP2CON_2 = 0x05;
+uint8_t address_CCPR2L_3 = 0x06;
+uint8_t address_CCP2CON_3 = 0x07;
+uint8_t address_CCPR2L_4 = 0x08;
+uint8_t address_CCP2CON_4 = 0x09;
+
+void setup(void);
+int map(int input);
+int mapU(int input);
+char USART_read(void);
+void USART_send(const char data);
+void USART_print(const char *string);
+
+void EEPROM_write(uint8_t address, uint8_t data);
+uint8_t EEPROM_read(uint8_t address);
+
+void __interrupt() isr (void){
+    if(PIR1bits.ADIF){                     
+        if(ADCON0bits.CHS == 0){   
+           CCPR_2 = map(ADRESH); 
+           CCPR2L = (uint8_t)(CCPR_2>>2);    
+           CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+           pot1con = CCP2CON; 
+           pot1rl = CCPR2L;
+        }
+        else if(ADCON0bits.CHS == 1){  
+           CCPR_2 = map(ADRESH); 
+           CCPR2L = (uint8_t)(CCPR_2>>2);    
+           CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+           pot2con = CCP2CON; 
+           pot2rl = CCPR2L;
+        }
+        else if(ADCON0bits.CHS == 2){   
+           CCPR_2 = map(ADRESH); 
+           CCPR2L = (uint8_t)(CCPR_2>>2);    
+           CCP2CONbits.DC2B0 = CCPR_2 & 0b11;
+           pot3con = CCP2CON; 
+           pot3rl = CCPR2L;
+        }
+        else if(ADCON0bits.CHS == 3){   
+           CCPR_2 = map(ADRESH); 
+           CCPR2L = (uint8_t)(CCPR_2>>2);    
+           CCP2CONbits.DC2B0 = CCPR_2 & 0b11;   
+           pot4con = CCP2CON; 
+           pot4rl = CCPR2L; 
+        }
+ 
+        PIR1bits.ADIF = 0;                  
+    }
+     if (INTCONbits.RBIF){
+        
+        if (PORTBbits.RB0==0){ 
+            servos = 1;
+        } 
+        else if (PORTBbits.RB1 ==0){ 
+            servos = 2;
+        } 
+        else if (PORTBbits.RB2 ==0){ 
+            servos = 3;
+        } 
+        else if (PORTBbits.RB3 ==0){ 
+            servos = 4;
+        } 
+        else if (PORTBbits.RB4 ==0){ //Guardar
+            PORTD = 0b00100000;
+            EEPROM_write(address_CCPR2L_1, pot1rl);
+            EEPROM_write(address_CCP2CON_1, pot1con);
+            EEPROM_write(address_CCPR2L_2, pot2rl);
+            EEPROM_write(address_CCP2CON_2, pot2con);
+            EEPROM_write(address_CCPR2L_3, pot3rl);
+            EEPROM_write(address_CCP2CON_3, pot3con);
+            EEPROM_write(address_CCPR2L_4, pot4rl);
+            EEPROM_write(address_CCP2CON_4, pot4con);
+        } 
+        else if (PORTBbits.RB5 ==0){ //Mostrar
+            servos = 6;
+        } 
+        else if (PORTBbits.RB6 ==0){ //Interfaz
+            servos = 7;
+        } 
+                
+        INTCONbits.RBIF=0;
+    }
+    return;
+}
+
+void main(void) {
+    setup();
+    while(1){
+        if(ADCON0bits.GO == 0b00){   
+            switch (servos){ 
+                case 1:                     //servo 1
+                    PORTD = 0b01000001;
+                    ADCON0bits.CHS = 0;    // Cambio de canal
+                    __delay_us(40);                
+                    ADCON0bits.GO = 1;    
+                break;
+
+                case 2:                     //servo 2
+                    PORTD = 0b01000010;
+                    ADCON0bits.CHS = 1;
+                    __delay_us(40);                
+                    ADCON0bits.GO = 1;    
+                break;
+
+                case 3:                     //servo 3
+                    PORTD = 0b01000100;    
+                    ADCON0bits.CHS = 2;
+                    __delay_us(40);                
+                    ADCON0bits.GO = 1;    
+                break;
+
+                case 4:                     //servo 4
+                    PORTD = 0b01001000;
+                    ADCON0bits.CHS = 3;
+                    __delay_us(40);                
+                    ADCON0bits.GO = 1; 
+                    __delay_us(40);
+                break;
+                                    
+                case 6:                     //Mostrar
+                   PORTD = 0b00100001;
+                   CCPR2L = EEPROM_read(address_CCPR2L_1);
+                   CCP2CON = EEPROM_read(address_CCP2CON_1);
+                   __delay_ms(1000);
+                   PORTD = 0b00100010;
+                   CCPR2L = EEPROM_read(address_CCPR2L_2);
+                   CCP2CON = EEPROM_read(address_CCP2CON_2);
+                   __delay_ms(1000);
+                   PORTD = 0b00100100;
+                   CCPR2L = EEPROM_read(address_CCPR2L_3);
+                   CCP2CON = EEPROM_read(address_CCP2CON_3);
+                   __delay_ms(1000);
+                   PORTD = 0b00101000;
+                   CCPR2L = EEPROM_read(address_CCPR2L_4);
+                   CCP2CON = EEPROM_read(address_CCP2CON_4);  
+                   __delay_ms(1000);
+                   PORTD = 0b00000000;
+                   servos = 0;
+                break;
+                
+                case 7:                 //Interfaz
+                    USART_print(cString);
+                    PORTD = 0b00010000;
+                    input[0] = USART_read();
+                    input[1] = '\0'; 
+                    if (strcmp(input, "1") == 0){ //servo 1
+                        PORTD = 0b00010001;
+                        CCPR_2 = mapU(USART_read()); 
+                        CCPR2L = (uint8_t)(CCPR_2>>2);    
+                        CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+//                        pot1con = CCP2CON; 
+//                        pot1rl = CCPR2L;  
+                    } 
+                    else if (strcmp(input, "2") == 0){ //servo 2
+                        PORTD = 0b00010010;
+                        CCPR_2 = mapU(USART_read()); 
+                        CCPR2L = (uint8_t)(CCPR_2>>2);    
+                        CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+//                        pot2con = CCP2CON; 
+//                        pot2rl = CCPR2L;
+                    }
+                    else if (strcmp(input, "3") == 0){ //servo 3
+                        PORTD = 0b00010100;
+                        CCPR_2 = mapU(USART_read()); 
+                        CCPR2L = (uint8_t)(CCPR_2>>2);    
+                        CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+//                        pot3con = CCP2CON; 
+//                        pot3rl = CCPR2L;  
+                    }
+                    else if (strcmp(input, "4") == 0){ //servo 4
+                        PORTD = 0b00011000;
+                        CCPR_2 = mapU(USART_read()); 
+                        CCPR2L = (uint8_t)(CCPR_2>>2);    
+                        CCP2CONbits.DC2B0 = CCPR_2 & 0b11; 
+//                        pot4con = CCP2CON; 
+//                        pot4rl = CCPR2L; 
+                    }
+                    else {
+                        PORTD = 0;
+                    }  
+                break;
+           
+                case 0:
+                    ADCON0bits.GO = 0;  
+                break;
+            }
+        } 
+    }
+    return;
+}
+
+void setup(void){
+    OPTION_REGbits.nRBPU=0; 
+    ANSEL = 0b00001111; 
+    ANSELH = 0; 
+    TRISD = 0;
+    PORTD = 0;
+    TRISA = 0XFF;
+    PORTA = 0;
+    TRISB = 0xFF;
+    PORTB = 0;
+    WPUB = 0xFF;
+    IOCB = 0xFF; 
+    
+    // CONFIGURACION RELOJ INTERNO
+    OSCCONbits.IRCF = 0b011;    // 500khz
+    OSCCONbits.SCS = 1;         // Oscilador interno
+  
+    TXSTAbits.SYNC = 0;
+    TXSTAbits.BRGH = 1;
+    BAUDCTLbits.BRG16 = 1;
+    SPBRG = 25;
+    SPBRGH = 0;
+    
+    RCSTAbits.SPEN = 1;
+    RCSTAbits.RX9 = 0;
+    RCSTAbits.CREN = 1;
+    TXSTAbits.TXEN = 1;
+    
+    // CONFIGURACION ADC
+    ADCON0bits.ADCS = 0b01;             // Fosc/8
+    ADCON1bits.VCFG0 = 0;               // VDD
+    ADCON1bits.VCFG1 = 0;               // VSS
+    ADCON0bits.CHS = 0;                // AN0   
+    ADCON1bits.ADFM = 0;               
+    ADCON0bits.ADON = 1;                // ADC
+    __delay_us(40);                     
+        
+    // CONFIGURACION PWM
+        
+    TRISCbits.TRISC2 = 1;       
+    TRISCbits.TRISC1 = 1;       
+    PR2 = 0b10011011;                  
+    
+    // CONFIGURACION CCP
+    CCP1CON = 0;                       
+    CCP2CON = 0;                       
+    CCP1CONbits.P1M = 0;               // Modo single output
+    CCP2CONbits.CCP2M = 0b1100;        // Modo single output
+    CCP1CONbits.CCP1M = 0b1100;        // PWM
+
+    CCPR1L = 16>>2;
+    CCPR2L = 16>>2;
+    CCP1CONbits.DC1B0 = 48 & 0b11;    
+    CCP2CONbits.DC2B0 = 48 & 0b11;    
+    
+    PIR1bits.TMR2IF = 0;       
+    T2CONbits.T2CKPS = 0b11;    // prescaler 1:16
+    T2CONbits.TMR2ON = 1;    
+    T2CON = 0b00000111 ;
+    
+    while(!PIR1bits.TMR2IF);    
+    PIR1bits.TMR2IF = 0;       
+    
+    TRISCbits.TRISC2 = 0;       // Salida de PWM
+    TRISCbits.TRISC1 = 0;       // Salida de PWM
+
+    // CONFIGURACION INTERRUPCIONES
+    INTCONbits.RBIE=1; 
+    INTCONbits.RBIF=0; 
+    PIR1bits.ADIF = 0;  
+    
+    PIE1bits.ADIE = 1;          // Int. de ADC
+    INTCONbits.PEIE = 1;        // Int. de perifericos
+    INTCONbits.GIE = 1;         // Int. globales
+    
+    PIR1bits.RCIF = 0;
+    PIE1bits.RCIE = 0;
+}
+
+int map(int input) {
+    int inputMin = 0;
+    int inputMax = 255;
+    int outputMin = 9;
+    int outputMax = 30;
+    int output = ((input - inputMin) * (outputMax - outputMin)) / (inputMax - inputMin) + outputMin;
+    return output;
+}
+
+int mapU(int input) {  
+    int inputMin = 0;
+    int inputMax = 127;
+    int outputMin = 9;
+    int outputMax = 30;
+    int output = ((input - inputMin) * (outputMax - outputMin)) / (inputMax - inputMin) + outputMin;
+    return output;
+}
+
+char USART_read(void){
+    while(!RCIF);
+    return RCREG;
+}
+
+void USART_send(const char data){
+    while(!TRMT);
+    TXREG = data;
+}
+
+void USART_print(const char *string){
+    int i = 0;
+    for(i; string[i] != '\0'; i++)    {
+        USART_send(string[i]);
+    }
+}
+
+//Lectura
+uint8_t EEPROM_read(uint8_t address){ 
+    
+    EEADR = address; //Registro de dirección
+    EECON1bits.EEPGD=0; //Acceso a memoria de datos
+    EECON1bits.RD=1; //Read control activado
+    __delay_us(1);
+    return EEDAT; //Registro de memoria de datos
+}
+
+//Escritura
+void EEPROM_write (uint8_t address, uint8_t data){ 
+    EEADR = address;  //Registro de dirección
+    EEDAT =data;     //Registro de datos
+    EECON1bits.EEPGD=0; //Acceso a memoria de datos
+    EECON1bits.WREN=1; //Write enable
+    INTCONbits.GIE=0; //Apagar interrupciones globales
+    EECON2 = 0x55;  //
+    EECON2 = 0xAA; 
+    EECON1bits.WR=1; //Empieza ciclo de escritura
+    while(!PIR2bits.EEIF); //Mientras no se haya completado la escritura espera
+    PIR2bits.EEIF = 0; //Limpieza de bandera de escritura
+    EECON1bits.WREN = 0; // Se deshabilita escritura en la EEPROM
+    INTCONbits.RBIF = 0; // Se limpian interrupciones del puerto B
+    PIR1bits.ADIF = 0; // Limpieza de bandera del ADC
+    INTCONbits.GIE = 1;  // Se habilitan interrupciones
+}
