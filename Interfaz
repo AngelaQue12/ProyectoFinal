@@ -1,0 +1,122 @@
+from tkinter import *
+from Adafruit_IO import Client, Feed
+import tkinter as tk
+import serial
+import threading
+import time
+global ser
+
+# Se configura el puerto serial
+ser = None
+
+ADAFRUIT_IO_KEY = 'aio_JbZU04buSM8vhnsZ2Yfnmdauasnm'
+ADAFRUIT_IO_USERNAME = 'AngelaQuezada'
+aio = Client(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
+
+def Ver(value):
+  # Se obtienen los datos del cuadro de entrada
+  data1 = scl1.get()
+  # Se escriben los datos al puerto serial
+  ser.write("1".encode())
+  time.sleep(1)
+  ser.write(chr(int(data1)).encode(encoding="ascii"))
+  print(value)
+  
+def Ver2(value):
+  # Se obtienen los datos del cuadro de entrada
+  data2 = scl2.get()
+  # Se escriben los datos al puerto serial
+  ser.write("2".encode())
+  time.sleep(1)
+  ser.write(chr(int(data2)).encode(encoding="ascii"))
+  print(value)
+  
+  
+def Ver3(value):
+  # Se obtienen los datos del cuadro de entrada
+  data3 = scl3.get()
+  # Se escriben los datos al puerto serial
+  ser.write("3".encode())
+  time.sleep(1)
+  ser.write(chr(int(data3)).encode(encoding="ascii"))
+  print(value)
+  
+def Ver4(value):
+  # Se obtienen los datos del cuadro de entrada
+  data4 = scl4.get()
+  # Se escriben los datos al puerto serial
+  ser.write("4".encode())
+  time.sleep(1)
+  ser.write(chr(int(data4)).encode(encoding="ascii"))
+  print(value)
+
+root = tk.Tk()
+root.title("Interfaz Freddy")
+
+#Barra 1
+scl1 = Scale(root, from_=35, to=127, tickinterval=15,
+length=400, resolution=1, showvalue=NO,
+orient='horizontal', label="Control Párpado Derecho")
+scl1.pack(expand=YES, fill=Y)
+
+#Barra 2
+scl2 = Scale(root, from_=35, to=127, tickinterval=15,
+length=400, resolution=1, showvalue=NO,
+orient='horizontal', label="Control Párpado Izquierdo")
+scl2.pack(expand=YES, fill=Y)
+
+#Barra 3
+scl3 = Scale(root, from_=35, to=127, tickinterval=15,
+length=400, resolution=1, showvalue=NO,
+orient='horizontal', label="Control Ojo Izquierdo")
+scl3.pack(expand=YES, fill=Y)
+
+#Barra 4
+scl4 = Scale(root, from_=35, to=127, tickinterval=15,
+length=400, resolution=1, showvalue=NO,
+orient='horizontal', label="Control Ojo Derecho")
+scl4.pack(expand=YES, fill=Y)
+
+# Se crea un cuadro de texto para mostrar los datos recibidos
+#text = tk.Text(root)
+#text.pack()
+
+scl1.bind("<ButtonRelease-1>", Ver)
+scl2.bind("<ButtonRelease-1>", Ver2)
+scl3.bind("<ButtonRelease-1>", Ver3)
+scl4.bind("<ButtonRelease-1>", Ver4)
+	
+# Función reciibir datos de AdaFruit
+def receive_adaf():
+    ser.write("1".encode())
+    time.sleep(1)
+    ser.write(chr(int(aio.receive('servo1')[3])).encode(encoding="ascii"))
+    time.sleep(1)
+    ser.write("2".encode())
+    time.sleep(1)
+    ser.write(chr(int(aio.receive('servo2')[3])).encode(encoding="ascii"))
+    time.sleep(1)
+    ser.write("3".encode())
+    time.sleep(1)
+    ser.write(chr(int(aio.receive('servo3')[3])).encode(encoding="ascii"))
+    time.sleep(1)
+    ser.write("4".encode())
+    time.sleep(1)
+    ser.write(chr(int(aio.receive('servo4')[3])).encode(encoding="ascii"))
+			
+# Función para iniciar el hilo de recepción
+def start_receive_thread():
+    # Se configura el puerto serial
+    global ser
+    ser = serial.Serial('COM5', 4800, timeout=1)
+       
+# Se crea el botón de conexión
+connect_button = tk.Button(root, text="Conectar", command=start_receive_thread)
+connect_button.pack()
+
+# Se crea botón de AdaFruit
+adaf_button = tk.Button(root, text="AdaFruit", command=receive_adaf)
+adaf_button.pack()
+
+# Se inicia el bucle principal de la GUI
+root.mainloop()
